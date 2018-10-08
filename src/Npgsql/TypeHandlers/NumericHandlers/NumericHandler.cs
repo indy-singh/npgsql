@@ -135,7 +135,7 @@ namespace Npgsql.TypeHandlers.NumericHandlers
         double INpgsqlSimpleTypeHandler<double>.Read(NpgsqlReadBuffer buf, int len, [CanBeNull] FieldDescription fieldDescription)
             => (double)Read(buf, len, fieldDescription);
 
-        #endregion Read
+        #endregion
 
         #region Write
 
@@ -251,6 +251,6 @@ namespace Npgsql.TypeHandlers.NumericHandlers
         public void Write(double value, NpgsqlWriteBuffer buf, NpgsqlParameter parameter)
             => Write((decimal)value, buf, parameter);
 
-        #endregion Write
+        #endregion
     }
 }

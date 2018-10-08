@@ -603,6 +603,43 @@ $$ LANGUAGE SQL;
             }
         }
 
+        [Test, Description("Tests parameter derivation for domain parameters in parameterized queries (CommandType.Text)")]
+        public void DeriveTextCommandParameters_Domain()
+        {
+            using (var conn = OpenConnection())
+            {
+                TestUtil.MinimumPgVersion(conn, "11.0", "Arrays of domains and domains over arrays were introduced in PostgreSQL 11");
+                conn.ExecuteNonQuery("CREATE DOMAIN pg_temp.posint AS integer CHECK (VALUE > 0);" +
+                                     "CREATE DOMAIN pg_temp.int_array  AS int[] CHECK(array_length(VALUE, 1) = 2);");
+                conn.ReloadTypes();
+
+                var cmd = new NpgsqlCommand("SELECT :a::posint, :b::posint[], :c::int_array", conn);
+                var val = 23;
+                var arrayVal = new[] { 7, 42 };
+
+                NpgsqlCommandBuilder.DeriveParameters(cmd);
+                Assert.That(cmd.Parameters, Has.Count.EqualTo(3));
+                Assert.That(cmd.Parameters[0].ParameterName, Is.EqualTo("a"));
+                Assert.That(cmd.Parameters[0].NpgsqlDbType, Is.EqualTo(NpgsqlDbType.Integer));
+                Assert.That(cmd.Parameters[0].DataTypeName, Does.EndWith("posint"));
+                Assert.That(cmd.Parameters[1].ParameterName, Is.EqualTo("b"));
+                Assert.That(cmd.Parameters[1].NpgsqlDbType, Is.EqualTo(NpgsqlDbType.Integer | NpgsqlDbType.Array));
+                Assert.That(cmd.Parameters[1].DataTypeName, Does.EndWith("posint[]"));
+                Assert.That(cmd.Parameters[2].ParameterName, Is.EqualTo("c"));
+                Assert.That(cmd.Parameters[2].NpgsqlDbType, Is.EqualTo(NpgsqlDbType.Integer | NpgsqlDbType.Array));
+                Assert.That(cmd.Parameters[2].DataTypeName, Does.EndWith("int_array"));
+                cmd.Parameters[0].Value = val;
+                cmd.Parameters[1].Value = arrayVal;
+                cmd.Parameters[2].Value = arrayVal;
+                using (var reader = cmd.ExecuteRecord())
+                {
+                    Assert.That(reader.GetFieldValue<int>(0), Is.EqualTo(val));
+                    Assert.That(reader.GetFieldValue<int[]>(1), Is.EqualTo(arrayVal));
+                    Assert.That(reader.GetFieldValue<int[]>(2), Is.EqualTo(arrayVal));
+                }
+            }
+        }
+
         [Test, Description("Tests parameter derivation for unmapped enum parameters in parameterized queries (CommandType.Text)")]
         public void DeriveTextCommandParameters_UnmappedEnum()
         {
@@ -804,5 +841,76 @@ $$ LANGUAGE SQL;
         }
 
         #endregion
+
+        [Test, IssueLink("https://github.com/npgsql/npgsql/issues/1591")]
+        public void GetUpdateCommandInfersParametersWithNpgsqDbType()
+        {
+            using (var conn = OpenConnection())
+            {
+                conn.ExecuteNonQuery(@"
+                    CREATE TABLE pg_temp.test (
+                        Cod varchar(5) NOT NULL,
+                        Descr varchar(40),
+                        Data date,
+                        DataOra timestamp,
+                        Intero smallInt NOT NULL,
+                        Decimale money,
+                        Singolo float,
+                        Booleano bit,
+                        Nota varchar(255),
+                        CONSTRAINT PK_test_Cod PRIMARY KEY (Cod)
+                    );
+                    INSERT INTO test VALUES('key1', 'description', '2018-07-03', '2018-07-03 07:02:00', 123, 123.4, 1234.5, B'1', 'note');
+                ");
+
+                var daDataAdapter =
+                    new NpgsqlDataAdapter(
+                        "SELECT Cod, Descr, Data, DataOra, Intero, Decimale, Singolo, Booleano, Nota FROM test", conn);
+                var cbCommandBuilder = new NpgsqlCommandBuilder(daDataAdapter);
+                var dtTable = new DataTable();
+
+                daDataAdapter.InsertCommand = cbCommandBuilder.GetInsertCommand();
+                daDataAdapter.UpdateCommand = cbCommandBuilder.GetUpdateCommand();
+                daDataAdapter.DeleteCommand = cbCommandBuilder.GetDeleteCommand();
+
+                Assert.That(daDataAdapter.UpdateCommand.Parameters[0].NpgsqlDbType, Is.EqualTo(NpgsqlDbType.Varchar));
+                Assert.That(daDataAdapter.UpdateCommand.Parameters[1].NpgsqlDbType, Is.EqualTo(NpgsqlDbType.Varchar));
+                Assert.That(daDataAdapter.UpdateCommand.Parameters[2].NpgsqlDbType, Is.EqualTo(NpgsqlDbType.Date));
+                Assert.That(daDataAdapter.UpdateCommand.Parameters[3].NpgsqlDbType, Is.EqualTo(NpgsqlDbType.Timestamp));
+                Assert.That(daDataAdapter.UpdateCommand.Parameters[4].NpgsqlDbType, Is.EqualTo(NpgsqlDbType.Smallint));
+                Assert.That(daDataAdapter.UpdateCommand.Parameters[5].NpgsqlDbType, Is.EqualTo(NpgsqlDbType.Money));
+                Assert.That(daDataAdapter.UpdateCommand.Parameters[6].NpgsqlDbType, Is.EqualTo(NpgsqlDbType.Double));
+                Assert.That(daDataAdapter.UpdateCommand.Parameters[7].NpgsqlDbType, Is.EqualTo(NpgsqlDbType.Bit));
+                Assert.That(daDataAdapter.UpdateCommand.Parameters[8].NpgsqlDbType, Is.EqualTo(NpgsqlDbType.Varchar));
+
+                Assert.That(daDataAdapter.UpdateCommand.Parameters[9].NpgsqlDbType, Is.EqualTo(NpgsqlDbType.Varchar));
+                Assert.That(daDataAdapter.UpdateCommand.Parameters[11].NpgsqlDbType, Is.EqualTo(NpgsqlDbType.Varchar));
+                Assert.That(daDataAdapter.UpdateCommand.Parameters[13].NpgsqlDbType, Is.EqualTo(NpgsqlDbType.Date));
+                Assert.That(daDataAdapter.UpdateCommand.Parameters[15].NpgsqlDbType, Is.EqualTo(NpgsqlDbType.Timestamp));
+                Assert.That(daDataAdapter.UpdateCommand.Parameters[16].NpgsqlDbType, Is.EqualTo(NpgsqlDbType.Smallint));
+                Assert.That(daDataAdapter.UpdateCommand.Parameters[18].NpgsqlDbType, Is.EqualTo(NpgsqlDbType.Money));
+                Assert.That(daDataAdapter.UpdateCommand.Parameters[20].NpgsqlDbType, Is.EqualTo(NpgsqlDbType.Double));
+                Assert.That(daDataAdapter.UpdateCommand.Parameters[22].NpgsqlDbType, Is.EqualTo(NpgsqlDbType.Bit));
+                Assert.That(daDataAdapter.UpdateCommand.Parameters[24].NpgsqlDbType, Is.EqualTo(NpgsqlDbType.Varchar));
+
+                daDataAdapter.Fill(dtTable);
+
+                var row = dtTable.Rows[0];
+
+                Assert.That(row[0], Is.EqualTo("key1"));
+                Assert.That(row[1], Is.EqualTo("description"));
+                Assert.That(row[2], Is.EqualTo(new DateTime(2018, 7, 3)));
+                Assert.That(row[3], Is.EqualTo(new DateTime(2018, 7, 3, 7, 2, 0)));
+                Assert.That(row[4], Is.EqualTo(123));
+                Assert.That(row[5], Is.EqualTo(123.4));
+                Assert.That(row[6], Is.EqualTo(1234.5));
+                Assert.That(row[7], Is.EqualTo(true));
+                Assert.That(row[8], Is.EqualTo("note"));
+
+                dtTable.Rows[0]["Singolo"] = 1.1D;
+
+                Assert.That(daDataAdapter.Update(dtTable), Is.EqualTo(1));
+            }
+        }
     }
 }

@@ -12,7 +12,6 @@ using JetBrains.Annotations;
 using Npgsql.BackendMessages;
 using Npgsql.FrontendMessages;
 using Npgsql.Logging;
-using Npgsql.Tls;
 using static Npgsql.Statics;
 
 namespace Npgsql
@@ -144,9 +143,9 @@ namespace Npgsql
                 {
                     var targetName = $"{KerberosServiceName}/{Host}";
                     if (async)
-                        negotiateStream.AuthenticateAsClient(CredentialCache.DefaultNetworkCredentials, targetName);
-                    else
                         await negotiateStream.AuthenticateAsClientAsync(CredentialCache.DefaultNetworkCredentials, targetName);
+                    else
+                        negotiateStream.AuthenticateAsClient(CredentialCache.DefaultNetworkCredentials, targetName);
                 }
                 catch (AuthenticationCompleteException)
                 {

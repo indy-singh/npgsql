@@ -23,54 +23,40 @@
 
 using System;
 using System.Diagnostics;
-using System.Net.NetworkInformation;
 using JetBrains.Annotations;
 using Npgsql.BackendMessages;
 using Npgsql.TypeHandling;
 using Npgsql.TypeMapping;
 using NpgsqlTypes;
 
-namespace Npgsql.TypeHandlers.NetworkHandlers
+namespace Npgsql.TypeHandlers.InternalTypeHandlers
 {
-    /// <remarks>
-    /// http://www.postgresql.org/docs/current/static/datatype-net-types.html
-    /// </remarks>
-    [TypeMapping("macaddr8", NpgsqlDbType.MacAddr8)]
-    class Macaddr8Handler : NpgsqlSimpleTypeHandler<PhysicalAddress>
+    [TypeMapping("tid", NpgsqlDbType.Tid, typeof(NpgsqlTid))]
+    class TidHandler : NpgsqlSimpleTypeHandler<NpgsqlTid>
     {
         #region Read
 
-        public override PhysicalAddress Read(NpgsqlReadBuffer buf, int len, FieldDescription fieldDescription = null)
+        public override NpgsqlTid Read(NpgsqlReadBuffer buf, int len, FieldDescription fieldDescription = null)
         {
-            Debug.Assert(len == 6 || len == 8);
+            Debug.Assert(len == 6);
 
-            var bytes = new byte[len];
+            var blockNumber = buf.ReadUInt32();
+            var offsetNumber = buf.ReadUInt16();
 
-            buf.ReadBytes(bytes, 0, len);
-            return new PhysicalAddress(bytes);
+            return new NpgsqlTid(blockNumber, offsetNumber);
         }
 
         #endregion Read
 
         #region Write
 
-        public override int ValidateAndGetLength(PhysicalAddress value, NpgsqlParameter parameter)
-        {
-            switch (value.GetAddressBytes().Length)
-            {
-            case 6:
-                return 6;
-            case 8:
-                return 8;
-            default:
-                throw new FormatException("MAC addresses must have length 6 in PostgreSQL");
-            }
-        }
+        public override int ValidateAndGetLength(NpgsqlTid value, NpgsqlParameter parameter)
+            => 6;
 
-        public override void Write(PhysicalAddress value, NpgsqlWriteBuffer buf, NpgsqlParameter parameter)
+        public override void Write(NpgsqlTid value, NpgsqlWriteBuffer buf, NpgsqlParameter parameter)
         {
-            var bytes = value.GetAddressBytes();
-            buf.WriteBytes(bytes, 0, bytes.Length);
+            buf.WriteUInt32(value.BlockNumber);
+            buf.WriteUInt16(value.OffsetNumber);
         }
 
         #endregion Write

@@ -1,5 +1,5 @@
 image: Visual Studio 2017
-version: 4.0.3-{build}
+version: 4.1.0-{build}
 environment:
   global:
     DOTNET_SKIP_FIRST_TIME_EXPERIENCE: true
@@ -16,9 +16,9 @@ cache:
 clone_depth: 10
 install:
   - powershell .build\setup_appveyor.ps1
-  # Install .NET Core 2.0
-  - ps: Invoke-WebRequest -Uri "https://raw.githubusercontent.com/dotnet/cli/master/scripts/obtain/dotnet-install.ps1" -OutFile "install-dotnet.ps1"
-  - ps: .\install-dotnet.ps1 -Version 2.1.300
+  # The following can be used to install a custom version of .NET Core
+  # - ps: Invoke-WebRequest -Uri "https://raw.githubusercontent.com/dotnet/cli/master/scripts/obtain/dotnet-install.ps1" -OutFile "install-dotnet.ps1"
+  # - ps: .\install-dotnet.ps1 -Version 2.1.300 -InstallDir "dotnetcli"
 services:
   - postgresql101
 before_build:
@@ -27,12 +27,12 @@ before_build:
   - appveyor-retry dotnet restore -v Minimal Npgsql.sln
   - appveyor-retry nuget restore src\VSIX\packages.config -SolutionDirectory . -Verbosity quiet -NonInteractive
 build_script:
-  - dotnet build "test\Npgsql.Tests" -c Debug -f net451
-  - dotnet build "test\Npgsql.PluginTests" -c Debug -f net451
+  - dotnet build "test\Npgsql.Tests" -c Debug -f net452
+  - dotnet build "test\Npgsql.PluginTests" -c Debug -f net452
   - msbuild src\VSIX\VSIX.csproj /p:Configuration=Release /v:Minimal
   - msbuild src\MSI\MSI.wixproj /p:Configuration=Release /v:Minimal
 after_build:
-  - dotnet pack src\Npgsql\Npgsql.csproj -c ReleaseOptimizedCryptography
+  - dotnet pack src\Npgsql\Npgsql.csproj -c Release
   - dotnet pack src\Npgsql.Json.NET\Npgsql.Json.NET.csproj -c Release
   - dotnet pack src\Npgsql.NodaTime\Npgsql.NodaTime.csproj -c Release
   - dotnet pack src\Npgsql.LegacyPostgis\Npgsql.LegacyPostgis.csproj -c Release
@@ -40,8 +40,8 @@ after_build:
   - dotnet pack src\Npgsql.NetTopologySuite\Npgsql.NetTopologySuite.csproj -c Release
 test:
   assemblies:
-    - test\Npgsql.Tests\bin\Debug\net451\Npgsql.Tests.dll
-    - test\Npgsql.PluginTests\bin\Debug\net451\Npgsql.PluginTests.dll
+    - test\Npgsql.Tests\bin\Debug\net452\Npgsql.Tests.dll
+    - test\Npgsql.PluginTests\bin\Debug\net452\Npgsql.PluginTests.dll
 artifacts:
   - path: 'src\**\*.nupkg'
     name: Nuget

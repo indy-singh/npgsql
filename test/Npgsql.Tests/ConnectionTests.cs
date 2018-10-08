@@ -779,7 +779,7 @@ namespace Npgsql.Tests
             using (var conn = OpenConnection())
             {
                 // Make sure messages are in English
-                conn.ExecuteNonQuery(@"SET lc_messages='en_US.UTF8'");
+                conn.ExecuteNonQuery(@"SET lc_messages='en_US.UTF-8'");
                 conn.ExecuteNonQuery(@"
                         CREATE OR REPLACE FUNCTION pg_temp.emit_notice() RETURNS VOID AS
                         'BEGIN RAISE NOTICE ''testnotice''; END;'
@@ -1074,7 +1074,7 @@ namespace Npgsql.Tests
             }
         }
 
-#if NET451
+#if NET452
         [Test, IssueLink("https://github.com/npgsql/npgsql/issues/392")]
         public void NonUTF8Encoding()
         {
